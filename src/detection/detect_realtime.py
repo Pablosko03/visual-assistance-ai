@@ -40,12 +40,11 @@ class RealTimeObstacleDetector:
         self.camera_id = camera_id
         self.cap = None
         
-        # Configurar anotadores
-        self.box_annotator = sv.BoxAnnotator(thickness=2, text_thickness=1, text_scale=0.5)
-        self.label_annotator = sv.LabelAnnotator(text_thickness=1, text_scale=0.5)
+        # Configurar anotadores (compatible con supervision v0.11.1)
+        self.box_annotator = sv.BoxAnnotator(thickness=2)
         
-        # Configurar seguimiento de objetos
-        self.tracker = sv.ByteTrack()
+        # Tracking no disponible en supervision v0.11.1
+        # self.tracker = sv.ByteTrack()
         
         # Sistema de alertas de voz
         self.alert_system = VoiceAlertSystem(language=language)
@@ -168,18 +167,15 @@ class RealTimeObstacleDetector:
         if len(detections) == 0:
             return detections
         
-        # Actualizar seguimiento
-        detections = self.tracker.update_with_detections(detections)
-        
         # Verificar objetos en zona de peligro
         objects_in_danger_zone = self.danger_zone.trigger(detections)
         
-        # Procesar cada detección
+        # Procesar cada detección (sin tracking por compatibilidad)
         current_time = time.time()
         objects_detected = []
         
-        for i, (bbox, class_id, confidence, tracker_id) in enumerate(
-            zip(detections.xyxy, detections.class_id, detections.confidence, detections.tracker_id)
+        for i, (bbox, class_id, confidence) in enumerate(
+            zip(detections.xyxy, detections.class_id, detections.confidence)
         ):
             object_type = self.obstacle_classes.get(class_id, 'unknown')
             objects_detected.append(object_type)
@@ -192,8 +188,8 @@ class RealTimeObstacleDetector:
             # Verificar si el objeto está en zona de peligro
             in_danger_zone = objects_in_danger_zone[i] if i < len(objects_in_danger_zone) else False
             
-            # Control de cooldown para alertas
-            alert_key = f"{object_type}_{tracker_id}"
+            # Control de cooldown para alertas (simplificado sin tracking)
+            alert_key = f"{object_type}_{i}"
             should_alert = (
                 alert_key not in self.last_detection_time or 
                 current_time - self.last_detection_time[alert_key] > self.detection_cooldown
@@ -236,22 +232,25 @@ class RealTimeObstacleDetector:
         annotated_frame = self.zone_annotator.annotate(scene=frame.copy())
         
         if len(detections) > 0:
-            # Crear etiquetas
+            # Crear etiquetas (sin tracking)
             labels = []
-            for class_id, confidence, tracker_id in zip(
-                detections.class_id, detections.confidence, detections.tracker_id
+            for i, (class_id, confidence) in enumerate(
+                zip(detections.class_id, detections.confidence)
             ):
                 object_name = self.obstacle_classes.get(class_id, 'unknown')
-                label = f"{object_name} #{tracker_id} {confidence:.2f}"
+                label = f"{object_name} #{i} {confidence:.2f}"
                 labels.append(label)
             
-            # Anotar cajas y etiquetas
+            # Anotar cajas (compatible con supervision v0.11.1)
             annotated_frame = self.box_annotator.annotate(
                 scene=annotated_frame, detections=detections
             )
-            annotated_frame = self.label_annotator.annotate(
-                scene=annotated_frame, detections=detections, labels=labels
-            )
+            
+            # Añadir etiquetas manualmente usando OpenCV
+            for i, (bbox, label) in enumerate(zip(detections.xyxy, labels)):
+                x1, y1, x2, y2 = bbox.astype(int)
+                cv2.putText(annotated_frame, label, (x1, y1 - 10), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
         # Añadir información de estado
         cv2.putText(annotated_frame, f"FPS: {self.current_fps}", (10, 30), 

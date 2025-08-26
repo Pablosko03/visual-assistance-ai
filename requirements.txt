@@ -1,8 +1,8 @@
 # Core dependencies for AI Visual Assistance Tool
 opencv-python==4.8.1.78
-ultralytics==8.0.196
-supervision==0.16.0
-roboflow==1.1.9
+ultralytics==8.0.151
+supervision==0.11.1
+roboflow==1.1.6
 
 # Audio processing for TTS (Text-to-Speech)
 pyttsx3==2.90

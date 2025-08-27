@@ -25,7 +25,6 @@ class VideoObstacleDetector:
         """
         self.model = YOLO(model_path)
         self.box_annotator = sv.BoxAnnotator(thickness=2, text_thickness=1, text_scale=0.5)
-        self.label_annotator = sv.LabelAnnotator(text_thickness=1, text_scale=0.5)
         
         # Clases de obstáculos relevantes (COCO dataset)
         self.obstacle_classes = {
@@ -61,7 +60,7 @@ class VideoObstacleDetector:
         """
         # Realizar detección
         results = self.model(frame)[0]
-        detections = sv.Detections.from_ultralytics(results)
+        detections = sv.Detections.from_yolov8(results)
         
         # Filtrar solo obstáculos relevantes
         obstacle_mask = [
@@ -76,13 +75,20 @@ class VideoObstacleDetector:
             for class_id, confidence in zip(detections.class_id, detections.confidence)
         ]
         
-        # Anotar frame
+        # Anotar frame con cajas y etiquetas
         annotated_frame = self.box_annotator.annotate(
             scene=frame.copy(), detections=detections
         )
-        annotated_frame = self.label_annotator.annotate(
-            scene=annotated_frame, detections=detections, labels=labels
-        )
+        
+        # Añadir etiquetas manualmente usando cv2
+        for detection, label in zip(detections.xyxy, labels):
+            x1, y1, x2, y2 = detection.astype(int)
+            # Dibujar etiqueta con fondo
+            label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+            cv2.rectangle(annotated_frame, (x1, y1 - label_size[1] - 10), 
+                         (x1 + label_size[0], y1), (0, 0, 0), -1)
+            cv2.putText(annotated_frame, label, (x1, y1 - 5), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
         return detections, annotated_frame
     

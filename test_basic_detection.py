@@ -33,7 +33,22 @@ def test_basic_detection():
         # Realizar detección
         print("🔍 Realizando detección...")
         results = model(test_image)[0]
-        detections = sv.Detections.from_ultralytics(results)
+        
+        # Crear detecciones manualmente para compatibilidad con supervision v0.11.1
+        if hasattr(results, 'boxes') and results.boxes is not None:
+            boxes = results.boxes.xyxy.cpu().numpy()
+            confidences = results.boxes.conf.cpu().numpy()
+            class_ids = results.boxes.cls.cpu().numpy().astype(int)
+            
+            detections = sv.Detections(
+                xyxy=boxes,
+                confidence=confidences,
+                class_id=class_ids
+            )
+        else:
+            # No hay detecciones
+            detections = sv.Detections.empty()
+        
         print(f"✅ Detección completada: {len(detections)} objetos encontrados")
         
         # Anotar imagen

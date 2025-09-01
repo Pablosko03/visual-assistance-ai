@@ -16,7 +16,13 @@ import os
 # Añadir el directorio padre al path para importar módulos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from audio.voice_alerts import VoiceAlertSystem, AlertPriority
+# from audio.voice_alerts import VoiceAlertSystem, AlertPriority
+try:
+    from audio.compatible_voice import CompatibleVoiceSystem
+    VOICE_SYSTEM_AVAILABLE = True
+except ImportError:
+    VOICE_SYSTEM_AVAILABLE = False
+    print("⚠️ Sistema de voz no disponible")
 
 
 class RealTimeObstacleDetector:
@@ -47,13 +53,14 @@ class RealTimeObstacleDetector:
         # self.tracker = sv.ByteTrack()
         
         # Sistema de alertas de voz
-        self.alert_system = VoiceAlertSystem(language=language)
+        if VOICE_SYSTEM_AVAILABLE:
+            self.alert_system = CompatibleVoiceSystem(language=language)
+        else:
+            self.alert_system = None
         
         # Zona de peligro (centro de la pantalla)
         self.danger_zone = None
-        self.zone_annotator = sv.PolygonZoneAnnotator(
-            zone=None, color=sv.Color.RED, thickness=2, text_thickness=1, text_scale=0.5
-        )
+        self.zone_annotator = None
         
         # Clases de obstáculos relevantes (COCO dataset)
         self.obstacle_classes = {
@@ -115,10 +122,15 @@ class RealTimeObstacleDetector:
         ])
         
         self.danger_zone = sv.PolygonZone(polygon=danger_zone_points)
-        self.zone_annotator = sv.PolygonZoneAnnotator(
-            zone=self.danger_zone, color=sv.Color.RED, thickness=2, 
-            text_thickness=1, text_scale=0.5
-        )
+        # Usar color RGB en lugar de sv.Color.RED para compatibilidad
+        try:
+            self.zone_annotator = sv.PolygonZoneAnnotator(
+                zone=self.danger_zone, color=(255, 0, 0), thickness=2, 
+                text_thickness=1, text_scale=0.5
+            )
+        except:
+            # Fallback si hay problemas con el anotador
+            self.zone_annotator = None
         
         return width, height
     
@@ -199,11 +211,9 @@ class RealTimeObstacleDetector:
                 self.last_detection_time[alert_key] = current_time
                 
                 # Generar alerta de voz
-                self.alert_system.add_detection_alert(
-                    object_type=object_type,
-                    confidence=confidence,
-                    distance=distance_estimate
-                )
+                if self.alert_system:
+                    alert_text = f"Obstáculo detectado: {object_type} a {distance_estimate}"
+                    self.alert_system.speak(alert_text)
         
         return detections
     
@@ -229,7 +239,14 @@ class RealTimeObstacleDetector:
             np.ndarray: Frame anotado
         """
         # Anotar zona de peligro
-        annotated_frame = self.zone_annotator.annotate(scene=frame.copy())
+        if self.zone_annotator:
+            annotated_frame = self.zone_annotator.annotate(scene=frame.copy())
+        else:
+            annotated_frame = frame.copy()
+            # Dibujar zona de peligro manualmente
+            if self.danger_zone:
+                cv2.polylines(annotated_frame, [self.danger_zone.polygon.astype(int)], 
+                             True, (0, 0, 255), 2)
         
         if len(detections) > 0:
             # Crear etiquetas (sin tracking)
@@ -331,7 +348,8 @@ class RealTimeObstacleDetector:
             if show_preview:
                 cv2.destroyAllWindows()
             
-            self.alert_system.stop()
+            if self.alert_system:
+                self.alert_system.stop()
             print("✅ Recursos liberados correctamente")
 
 

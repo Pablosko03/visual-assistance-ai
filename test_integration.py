@@ -135,7 +135,10 @@ def test_zone_detection():
             [margin_x, height - margin_y]
         ])
         
-        danger_zone = sv.PolygonZone(polygon=danger_zone_points)
+        danger_zone = sv.PolygonZone(
+            polygon=danger_zone_points,
+            frame_resolution_wh=(width, height)
+        )
         print("✅ Zona de peligro creada")
         
         # Simular detecciones en diferentes posiciones
